@@ -16,25 +16,43 @@ ui <- fluidPage(
                  textInput("last_name", "Last Name"),
                  actionButton("add_student", "Add Student")),
         tabPanel("Add Note",
-                 DTOutput("student_table"),
+                 textOutput("selected_student"),
                  textAreaInput("note", "Note"),
-                 actionButton("add_note", "Add Note"))
+                 actionButton("add_note", "Add Note"),
+                 DTOutput("previous_notes"))
       )
     ),
     mainPanel(
-      DTOutput("notes_table")
+      DTOutput("student_table")
     )
   )
 )
 
 server <- function(input, output, session) {
 
+  selected_student <- reactiveVal(NULL)
+
   output$student_table <- renderDT({
     dbGetQuery(con, "SELECT * FROM Students")
   }, selection = "single")
 
-  output$notes_table <- renderDT({
-    dbGetQuery(con, "SELECT * FROM Notes")
+  observe({
+    sel_student <- input$student_table_rows_selected
+    if (!is.null(sel_student) && length(sel_student) > 0) {
+      selected_student(sel_student[1])
+    }
+  })
+
+  output$selected_student <- renderText({
+    if (!is.null(selected_student())) {
+      paste("Selected Student ID: ", selected_student())
+    }
+  })
+
+  output$previous_notes <- renderDT({
+    if (!is.null(selected_student())) {
+      dbGetQuery(con, paste("SELECT * FROM Notes WHERE StudentID = ", selected_student()))
+    }
   })
 
   observeEvent(input$add_student, {
@@ -43,10 +61,9 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$add_note, {
-    selected_student <- input$student_table_rows
-    if (!is.null(selected_student)) {
+    if (!is.null(selected_student())) {
       dbExecute(con, "INSERT INTO Notes (StudentID, NoteText, DateAdded) VALUES (?, ?, ?)",
-                params = list(selected_student, input$note, Sys.time()))
+                params = list(selected_student(), input$note, Sys.time()))
     }
   })
 
